@@ -19,20 +19,25 @@ package org.tensorflow.lite.examples.classification;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Typeface;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
 import android.media.ImageReader.OnImageAvailableListener;
 import android.os.SystemClock;
 import android.util.Size;
 import android.util.TypedValue;
 import android.widget.Toast;
-import java.io.IOException;
-import java.util.List;
+
 import org.tensorflow.lite.examples.classification.env.BorderedText;
 import org.tensorflow.lite.examples.classification.env.Logger;
 import org.tensorflow.lite.examples.classification.tflite.Classifier;
 import org.tensorflow.lite.examples.classification.tflite.Classifier.Device;
 import org.tensorflow.lite.examples.classification.tflite.Classifier.Model;
 
-public class ClassifierActivity extends CameraActivity implements OnImageAvailableListener {
+import java.io.IOException;
+import java.util.List;
+
+public class ClassifierActivity extends CameraActivity implements OnImageAvailableListener, SensorEventListener {
   private static final Logger LOGGER = new Logger();
   private static final Size DESIRED_PREVIEW_SIZE = new Size(640, 480);
   private static final float TEXT_SIZE_DIP = 10;
@@ -45,6 +50,15 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
   private int imageSizeX;
   /** Input image size of the model along y axis. */
   private int imageSizeY;
+
+  /**
+   * 센서 값
+   */
+  public float[] accValues = new float[3];
+  public float[] gyroValues = new float[3];
+
+  String[] accerelometerData = null;
+  String[] gyroData = null;
 
   @Override
   protected int getLayoutId() {
@@ -106,6 +120,7 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
                       showCameraResolution(cropSize + "x" + cropSize);
                       showRotationInfo(String.valueOf(sensorOrientation));
                       showInference(lastProcessingTimeMs + "ms");
+                      showSenSorInfo(accValues,gyroValues,accerelometerData,gyroData);
                     }
                   });
             }
@@ -157,5 +172,27 @@ public class ClassifierActivity extends CameraActivity implements OnImageAvailab
     // Updates the input image size.
     imageSizeX = classifier.getImageSizeX();
     imageSizeY = classifier.getImageSizeY();
+  }
+
+  @Override
+  public void onSensorChanged(SensorEvent e) {
+
+    if (e.sensor.getType() == Sensor.TYPE_ACCELEROMETER){
+      LOGGER.d("Not creating classifier: GPU doesn't support quantized models.");
+
+      accValues = e.values;
+      accerelometerData = new String[]{String.valueOf(accValues[0]), String.valueOf(accValues[1]), String.valueOf(accValues[2])};
+    }
+    if (e.sensor.getType() == Sensor.TYPE_GYROSCOPE){
+      LOGGER.d("Not creating classifier: GPU doesn't support quantized models.");
+
+      gyroValues = e.values;
+      gyroData = new String[]{String.valueOf(gyroValues[0]), String.valueOf(gyroValues[1]), String.valueOf(gyroValues[2])};
+    }
+  }
+
+  @Override
+  public void onAccuracyChanged(Sensor sensor, int i) {
+
   }
 }

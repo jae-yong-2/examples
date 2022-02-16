@@ -17,10 +17,15 @@
 package org.tensorflow.lite.examples.classification;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
+import android.hardware.Sensor;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
@@ -31,36 +36,51 @@ import android.media.ImageReader;
 import android.media.ImageReader.OnImageAvailableListener;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Trace;
-import androidx.appcompat.app.AppCompatActivity;
 import android.util.Size;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.AdapterView;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.UiThread;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
-import java.nio.ByteBuffer;
-import java.util.List;
+
 import org.tensorflow.lite.examples.classification.env.ImageUtils;
 import org.tensorflow.lite.examples.classification.env.Logger;
 import org.tensorflow.lite.examples.classification.tflite.Classifier.Device;
 import org.tensorflow.lite.examples.classification.tflite.Classifier.Model;
 import org.tensorflow.lite.examples.classification.tflite.Classifier.Recognition;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+import de.siegmar.fastcsv.writer.CsvWriter;
+
 public abstract class CameraActivity extends AppCompatActivity
     implements OnImageAvailableListener,
         Camera.PreviewCallback,
         View.OnClickListener,
+        SensorEventListener,
         AdapterView.OnItemSelectedListener {
   private static final Logger LOGGER = new Logger();
 
@@ -91,7 +111,29 @@ public abstract class CameraActivity extends AppCompatActivity
       cropValueTextView,
       cameraResolutionTextView,
       rotationTextView,
-      inferenceTimeTextView;
+      inferenceTimeTextView,
+      /**
+       * 센서 뷰 추가
+       */
+      accView,
+      gyroView;
+
+  /**
+   * 센서 추가
+   */
+  private SensorManager sensorManager;
+  private Sensor acc;
+  private Sensor gyro;
+
+  private Button startButton;
+  private Button stopButton;
+  private boolean recording=false;
+  private CsvWriter csvWriter=null;
+  Collection<String[]> accerelometerData = new ArrayList<>();
+  Collection<String[]> gyroData = new ArrayList<>();
+
+
+
   protected ImageView bottomSheetArrowImageView;
   private ImageView plusImageView, minusImageView;
   private Spinner modelSpinner;
@@ -125,6 +167,19 @@ public abstract class CameraActivity extends AppCompatActivity
     gestureLayout = findViewById(R.id.gesture_layout);
     sheetBehavior = BottomSheetBehavior.from(bottomSheetLayout);
     bottomSheetArrowImageView = findViewById(R.id.bottom_sheet_arrow);
+
+    startButton=findViewById(R.id.startButton);
+    stopButton=findViewById(R.id.stopButton);
+    /**
+     * Add
+     * acc and gyro View
+     */
+    sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+    accView = findViewById(R.id.acc);
+    gyroView = findViewById(R.id.gyro);
+
+    acc = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);      // Accelerometer
+    gyro = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);     // Step detected
 
     ViewTreeObserver vto = gestureLayout.getViewTreeObserver();
     vto.addOnGlobalLayoutListener(
@@ -191,6 +246,9 @@ public abstract class CameraActivity extends AppCompatActivity
 
     plusImageView.setOnClickListener(this);
     minusImageView.setOnClickListener(this);
+
+    startButton.setOnClickListener(this);
+    stopButton.setOnClickListener(this);
 
     model = Model.valueOf(modelSpinner.getSelectedItem().toString().toUpperCase());
     device = Device.valueOf(deviceSpinner.getSelectedItem().toString());
@@ -333,6 +391,8 @@ public abstract class CameraActivity extends AppCompatActivity
     handlerThread = new HandlerThread("inference");
     handlerThread.start();
     handler = new Handler(handlerThread.getLooper());
+    sensorManager.registerListener((SensorEventListener) this, acc, SensorManager.SENSOR_DELAY_NORMAL);
+    sensorManager.registerListener((SensorEventListener) this, gyro, SensorManager.SENSOR_DELAY_NORMAL);
   }
 
   @Override
@@ -520,6 +580,7 @@ public abstract class CameraActivity extends AppCompatActivity
     }
   }
 
+  @SuppressLint({"DefaultLocale", "SetTextI18n"})
   @UiThread
   protected void showResultsInBottomSheet(List<Recognition> results) {
     if (results != null && results.size() >= 3) {
@@ -567,6 +628,19 @@ public abstract class CameraActivity extends AppCompatActivity
 
   protected void showInference(String inferenceTime) {
     inferenceTimeTextView.setText(inferenceTime);
+  }
+
+  /**
+   * Acc, GYRO ui
+   */
+  @SuppressLint("DefaultLocale")
+  protected void showSenSorInfo(float[] accValue, float[] gyroValue, String[] accData, String[] gyroData){
+    accView.setText(String.format("Acc   :X = %.2f  Y = %.2f  Z = %.2f",accValue[0],accValue[1],accValue[2]));
+    gyroView.setText(String.format("Gyro  :X = %.2f  Y = %.2f  Z = %.2f",gyroValue[0],gyroValue[1],gyroValue[2]));
+    if(recording){
+      this.accerelometerData.add(accData);
+      this.gyroData.add(gyroData);
+    }
   }
 
   protected Model getModel() {
@@ -635,9 +709,46 @@ public abstract class CameraActivity extends AppCompatActivity
       }
       setNumThreads(--numThreads);
       threadsTextView.setText(String.valueOf(numThreads));
+    } else if (v.getId() == R.id.startButton){
+      Toast.makeText(getApplicationContext(), "start recording", Toast.LENGTH_LONG).show();
+
+      recording=true;
+
+    } else if (v.getId() == R.id.stopButton){
+
+      recording=false;
+
+      if(storagePermitted((Activity) this)) {
+        csvWriter = new CsvWriter();
+        File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Test_accelerometer" + ".csv");
+        File file2 = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Test_gyroscope" + ".csv");
+        Toast.makeText(getApplicationContext(), "stop recording", Toast.LENGTH_LONG).show();
+        try {
+          csvWriter.write(file, StandardCharsets.UTF_8, this.accerelometerData);
+          csvWriter.write(file2, StandardCharsets.UTF_8, this.gyroData);
+        } catch (IOException io) {
+          Toast.makeText(getApplicationContext(), "save error", Toast.LENGTH_LONG).show();
+        }
+      }
+
+
     }
   }
+  private static boolean storagePermitted(Activity activity) {
 
+    // Check read and write permissions
+    Boolean readPermission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    Boolean writePermission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+
+    if (readPermission && writePermission) {
+      return true;
+    }
+
+    // Request permission to the user
+    ActivityCompat.requestPermissions(activity, new String[]{ Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE }, 1);
+
+    return false;
+  }
   @Override
   public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
     if (parent == modelSpinner) {

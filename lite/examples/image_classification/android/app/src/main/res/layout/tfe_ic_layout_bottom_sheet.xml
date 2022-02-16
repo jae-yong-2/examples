@@ -318,4 +318,37 @@
             android:entries="@array/tfe_ic_devices"
             android:prompt="@string/tfe_ic_device" />
     </RelativeLayout>
+
+    <TextView
+        android:id="@+id/acc"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:text="acc :"
+        android:textColor="@android:color/black"/>
+    <TextView
+        android:id="@+id/gyro"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:text="gyro :"
+        android:textColor="@android:color/black"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
+        <Button
+            android:id="@+id/startButton"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:width="120dp"
+            android:height="10dp"
+            android:text="start"/>
+        <Button
+            android:id="@+id/stopButton"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:width="120dp"
+            android:height="10dp"
+            android:text="stop"/>
+    </LinearLayout>
+
 </LinearLayout>

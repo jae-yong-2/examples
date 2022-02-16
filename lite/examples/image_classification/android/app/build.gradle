@@ -17,9 +17,6 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    aaptOptions {
-        noCompress "tflite"
-    }
     compileOptions {
         sourceCompatibility = '1.8'
         targetCompatibility = '1.8'
@@ -39,6 +36,9 @@ android {
            dimension "tfliteInference"
        }
    }
+    androidResources {
+        noCompress 'tflite'
+    }
 
 }
 
@@ -49,6 +49,8 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.0.0'
     implementation 'androidx.coordinatorlayout:coordinatorlayout:1.0.0'
     implementation 'com.google.android.material:material:1.0.0'
+    implementation 'de.siegmar:fastcsv:1.0.3'
+
 
     androidTestImplementation 'androidx.test.ext:junit:1.1.1'
     androidTestImplementation 'com.google.truth:truth:1.0.1'

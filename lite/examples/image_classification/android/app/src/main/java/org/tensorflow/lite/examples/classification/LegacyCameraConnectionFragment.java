@@ -31,12 +31,15 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
-import java.io.IOException;
-import java.util.List;
+
 import org.tensorflow.lite.examples.classification.customview.AutoFitTextureView;
 import org.tensorflow.lite.examples.classification.env.ImageUtils;
 import org.tensorflow.lite.examples.classification.env.Logger;
 
+import java.io.IOException;
+import java.util.List;
+
+@SuppressLint("ValidFragment")
 public class LegacyCameraConnectionFragment extends Fragment {
   private static final Logger LOGGER = new Logger();
   /** Conversion from screen rotation to JPEG orientation. */
